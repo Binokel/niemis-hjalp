@@ -145,6 +145,7 @@
         };
         feedback.makePlan = function (turns, route) {
           calls.push({ fn: 'makePlan', turns: clone(turns), route: route });
+          if (window.__failPlan) return Promise.reject(new Error('Planen gick inte att skriva.'));
           var n = turns.filter(function (t) { return t.role === 'user'; }).length;
           return Promise.resolve({ title: 'Spara-knappen på iPad' + (n > 1 ? ' (rättad)' : ''), problem: 'Knappen syns inte.',
             location: route, solution: 'Flytta knappen.', questions: ['Vilken iPad?'] });

@@ -431,6 +431,70 @@ async function extra(browser) {
     }
   });
 
+  await test("samtal: misslyckad rättelse skickas inte och ligger kvar i rutan", async () => {
+    const b = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
+    try {
+      const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, permissions: ["microphone"] });
+      ctx.setDefaultTimeout(8000);
+      const page = await ctx.newPage();
+      await page.goto(PAGE + "?samtal=1");
+      await page.click(sel.button);
+      await page.click(sel.item("Ge feedback"));
+      await page.locator(sel.dialog).waitFor({ state: "visible" });
+      const mic = page.locator(H + " button.mic");
+      await mic.click();
+      await page.locator(H + ' [role=status]:has-text("Lyssnar")').waitFor();
+      await page.waitForTimeout(600);
+      await mic.click();
+      await page.locator(H + ' .bub.ai:has-text("Spara-knappen på iPad")').waitFor();
+      await page.evaluate(() => (window.__failPlan = true));
+      await page.fill(sel.text, "Det gäller iPad mini.");
+      await page.selectOption(H + " #bh-person", "p1");
+      await page.click(H + ' button[type=submit]:has-text("Skicka feedback")');
+      await page.locator(H + ' [role=status]:has-text("Planen gick inte att skriva")').waitFor();
+      ok((await calls(page, "submit")).length === 0, "skickades trots att planen inte gick att skriva om");
+      ok((await page.inputValue(sel.text)) === "Det gäller iPad mini.", "rättelsen ligger inte kvar i rutan");
+      ok((await page.locator(H + " .bub.me").count()) === 1, "den misslyckade rättelsen visas som bubbla");
+      await page.evaluate(() => (window.__failPlan = false));
+      await page.click(H + ' button[type=submit]:has-text("Skicka feedback")');
+      await page.locator(H + ' .ok:has-text("Din feedback har skickats")').waitFor();
+      const s = (await calls(page, "submit"))[0];
+      ok(/iPad mini/.test(s.text) && s.text.split("iPad mini").length === 2, "rättelsen skickas fel: " + s.text);
+      ok(s.plan && /rättad/.test(s.plan.title), "planen är inte omskriven: " + JSON.stringify(s.plan));
+      await ctx.close();
+    } finally {
+      await b.close();
+    }
+  });
+
+  await test("samtal: plan och tom ruta skickar allt som sagts med planen", async () => {
+    const b = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
+    try {
+      const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, permissions: ["microphone"] });
+      ctx.setDefaultTimeout(8000);
+      const page = await ctx.newPage();
+      await page.goto(PAGE + "?samtal=1");
+      await page.click(sel.button);
+      await page.click(sel.item("Ge feedback"));
+      await page.locator(sel.dialog).waitFor({ state: "visible" });
+      const mic = page.locator(H + " button.mic");
+      await mic.click();
+      await page.locator(H + ' [role=status]:has-text("Lyssnar")').waitFor();
+      await page.waitForTimeout(600);
+      await mic.click();
+      await page.locator(H + ' .bub.ai:has-text("Spara-knappen på iPad")').waitFor();
+      await page.selectOption(H + " #bh-person", "p1");
+      await page.click(H + ' button[type=submit]:has-text("Skicka feedback")');
+      await page.locator(H + ' .ok:has-text("Din feedback har skickats")').waitFor();
+      const s = (await calls(page, "submit"))[0];
+      ok(/Knappen Spara/.test(s.text) && s.plan && !/rättad/.test(s.plan.title), "fel inskick: " + JSON.stringify(s));
+      ok((await calls(page, "makePlan")).length === 1, "planen skrevs om i onödan");
+      await ctx.close();
+    } finally {
+      await b.close();
+    }
+  });
+
   await test("utan transcribe och makePlan: samma formulär som förut", async () => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     const page = await ctx.newPage();

@@ -600,6 +600,7 @@
       var el = log.appendChild(h("p", { class: "bub " + cls, text: t }));
       log.scrollTop = log.scrollHeight;
       if (el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+      return el;
     }
     function planText(p) {
       return [p.title, p.problem, p.location ? "Var: " + p.location : "", p.solution ? "Förslag: " + p.solution : ""]
@@ -613,7 +614,7 @@
     async function ask(t) {
       said.push(t);
       turns.push({ role: "user", text: t });
-      bubble("me", t);
+      var mine = bubble("me", t);
       busy(true, "Tänker …");
       try {
         var p = await a.makePlan(turns.slice(), location.pathname);
@@ -625,6 +626,12 @@
         busy(false, "Klar – prata in igen eller skriv en rättelse, eller skicka.");
         return true;
       } catch (ex) {
+        // Det som inte blev en plan tas bort ur samtalet och läggs tillbaka i rutan, så att det
+        // aldrig skickas med en plan som inte stämmer.
+        said.pop();
+        turns.pop();
+        if (mine.parentNode) mine.parentNode.removeChild(mine);
+        ta.value = ta.value.trim() ? t + "\n\n" + ta.value : t;
         busy(false, errText(ex) || "Planen gick inte att skriva. Försök igen.");
         return false;
       }
