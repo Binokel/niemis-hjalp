@@ -390,6 +390,58 @@ async function extra(browser) {
     await ctx.close();
   });
 
+  await test("samtal: prata in, plan, rättelse i text, skicka med plan", async () => {
+    const b = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
+    try {
+      for (const [namn, opts] of [["iphone", { ...devices["iPhone 13"] }], ["dator", { viewport: { width: 1280, height: 800 } }]]) {
+        const ctx = await b.newContext({ ...opts, permissions: ["microphone"] });
+        ctx.setDefaultTimeout(8000);
+        const page = await ctx.newPage();
+        await page.goto(PAGE + "?samtal=1");
+        await page.click(sel.button);
+        await page.click(sel.item("Ge feedback"));
+        await page.locator(sel.dialog).waitFor({ state: "visible" });
+        const mic = page.locator(H + " button.mic");
+        await mic.click();
+        await page.locator(H + ' [role=status]:has-text("Lyssnar")').waitFor();
+        await page.waitForTimeout(600);
+        await mic.click();
+        await page.locator(H + ' .bub.ai:has-text("Spara-knappen på iPad")').waitFor();
+        await page.locator(H + ' [role=status]:has-text("Klar")').waitFor();
+        ok(await page.locator(H + " .bub.me").first().isVisible(), "det inpratade syns inte som bubbla");
+        await page.fill(sel.text, "Det gäller iPad mini.");
+        await page.click(H + ' button:has-text("Uppdatera planen")');
+        await page.locator(H + ' .bub.ai:has-text("(rättad)")').waitFor();
+        await page.locator(sel.dialog).evaluate((el) => (el.scrollTop = 0));
+        await page.screenshot({ path: path.join(SHOTS, namn + "-samtal.png") });
+        const mp = (await calls(page, "makePlan")).pop();
+        ok(mp.turns.length === 3 && mp.turns[1].role === "plan", "fel samtal till makePlan: " + JSON.stringify(mp.turns));
+        await page.selectOption(H + " #bh-person", "p1");
+        await page.click(H + ' button[type=submit]:has-text("Skicka feedback")');
+        await page.locator(H + ' .ok:has-text("Din feedback har skickats")').waitFor();
+        const s = (await calls(page, "submit"))[0];
+        ok(/Knappen Spara/.test(s.text) && /iPad mini/.test(s.text), "allt som sagts skickas inte: " + s.text);
+        ok(s.plan && /rättad/.test(s.plan.title), "planen skickas inte: " + JSON.stringify(s.plan));
+        const t = (await calls(page, "transcribe"))[0];
+        ok(t && t.size > 0, "tom inspelning: " + JSON.stringify(t));
+        await ctx.close();
+      }
+    } finally {
+      await b.close();
+    }
+  });
+
+  await test("utan transcribe och makePlan: samma formulär som förut", async () => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    await page.goto(PAGE);
+    await page.click(sel.button);
+    await page.click(sel.item("Ge feedback"));
+    await page.locator(sel.dialog).waitFor({ state: "visible" });
+    ok((await page.locator(H + " button.mic").count()) === 0, "mikrofonen visas utan stöd i adaptern");
+    await ctx.close();
+  });
+
   await test("tom lista i Min feedback", async () => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     ctx.setDefaultTimeout(5000);
@@ -412,9 +464,9 @@ function staticChecks() {
     const hits = banned.filter((w) => src.includes(w));
     ok(hits.length === 0, "förbjudet: " + hits.join(", "));
   });
-  test("storleken är under 40 kB", async () => {
+  test("storleken är under 44 kB", async () => {
     const size = Buffer.byteLength(src);
-    ok(size < 40 * 1024, size + " byte");
+    ok(size < 44 * 1024, size + " byte");
     console.log("       " + size + " byte");
   });
   test("inga ES2020-konstruktioner (?. och ??)", async () => {

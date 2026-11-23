@@ -108,7 +108,7 @@
       var feedback = {
         submit: function (p) {
           calls.push({ fn: 'submit', text: p.text, general: p.general, route: p.route, reporterId: p.reporterId,
-            screenshot: p.screenshot ? { type: p.screenshot.type, size: p.screenshot.size } : null });
+            screenshot: p.screenshot ? { type: p.screenshot.type, size: p.screenshot.size } : null, plan: p.plan || null });
           if (window.__mock.failSubmit) return Promise.resolve({ ok: false, message: 'Servern svarade inte.' });
           return Promise.resolve({ ok: true, message: 'Ärendenummer 42.' });
         },
@@ -137,6 +137,18 @@
       }
       if (q.get('personer') !== '0') {
         feedback.reporters = function () { return Promise.resolve([{ id: 'p1', name: 'Anna Testsson' }, { id: 'p2', name: 'Bo Provare' }]); };
+      }
+      if (q.get('samtal') === '1') {
+        feedback.transcribe = function (blob) {
+          calls.push({ fn: 'transcribe', type: blob.type, size: blob.size });
+          return Promise.resolve('Knappen Spara syns inte på iPad.');
+        };
+        feedback.makePlan = function (turns, route) {
+          calls.push({ fn: 'makePlan', turns: clone(turns), route: route });
+          var n = turns.filter(function (t) { return t.role === 'user'; }).length;
+          return Promise.resolve({ title: 'Spara-knappen på iPad' + (n > 1 ? ' (rättad)' : ''), problem: 'Knappen syns inte.',
+            location: route, solution: 'Flytta knappen.', questions: ['Vilken iPad?'] });
+        };
       }
       window.NiemisHjalp.init({ app: 'testapp', iris: true, bottom: 16, bottomMobile: 72, feedback: feedback });
     })();
