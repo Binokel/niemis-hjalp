@@ -8,7 +8,7 @@
   "use strict";
   if (window.NiemisHjalp && window.NiemisHjalp.version) return;
 
-  var VERSION = "1.1.1";
+  var VERSION = "1.2.0";
   var IRIS_URL = "https://northern-lens-learning-quest.lovable.app/fraga?inbaddad=1&app=";
   var Z = 2147483000;
   var STATUS = {
@@ -196,6 +196,10 @@
     ".b[disabled]{opacity:.55;cursor:default}" +
     ".hint{color:var(--muted);font-size:14px;margin:6px 0 0}" +
     ".err{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:var(--err-bg);color:var(--err);font-weight:600}" +
+    ".log{display:flex;flex-direction:column;gap:8px;max-height:45vh;overflow:auto;margin-top:6px}" +
+    ".bub{margin:0;padding:10px 12px;border-radius:14px;max-width:90%;white-space:pre-wrap;word-break:break-word}" +
+    ".bub.me{align-self:flex-end;background:var(--navy);color:#fff}.bub.ai{align-self:flex-start;background:var(--hover)}" +
+    ".mic{position:sticky;bottom:8px;z-index:1;width:100%;min-height:64px;margin-top:12px;font-size:18px}.mic.on{background:var(--err);border-color:var(--err)}" +
     ".ok{padding:8px 0}.ok p{margin:0 0 8px}" +
     ".list{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}" +
     ".item{padding:12px 14px;border:1px solid var(--line);border-radius:12px}" +
@@ -468,6 +472,7 @@
 
   function onDialogClosed() {
     dlgOpen = false;
+    if (stopRec) stopRec();
     var shade = root.querySelector(".shade");
     if (shade) shade.remove();
     dlgBody.textContent = "";
@@ -485,6 +490,7 @@
   }
 
   var formRefs = null;
+  var stopRec = null; // stänger mikrofonen om rutan stängs under inspelning
   function saveDraftFromForm() {
     if (!formRefs || !formRefs.ta.isConnected) return;
     draft.text = formRefs.ta.value;
@@ -579,8 +585,104 @@
     var people = [];
     var err = h("p", { class: "err", role: "alert", hidden: true });
     var send = h("button", { type: "submit", class: "b p", text: "Skicka" });
+    // Samtal (Daniel 2026-11-23): prata in, appen skriver ut och gör en plan, rätta tills den stämmer.
+    // Bara när appens adapter har transcribe och makePlan; annars samma formulär som förut.
+    var talk = typeof a.transcribe === "function" && typeof a.makePlan === "function" && !!window.MediaRecorder &&
+      !!navigator.mediaDevices;
+    var turns = [];
+    var said = [];
+    var plan = null;
+    var rec = null;
+    var log = h("div", { class: "log", "aria-live": "polite" });
+    var mode = h("p", { class: "hint", role: "status", text: "Tryck på mikrofonen och berätta. Du kan rätta tills planen stämmer." });
+    var mic = h("button", { type: "button", class: "b o mic", text: "Prata in", on: { click: toggleRec } });
+    var upd = h("button", { type: "button", class: "b", text: "Uppdatera planen", hidden: true, on: { click: function () {
+      var t = ta.value.trim();
+      if (t) {
+        ta.value = "";
+        ask(t);
+      }
+    } } });
+    function bubble(cls, t) {
+      var el = log.appendChild(h("p", { class: "bub " + cls, text: t }));
+      log.scrollTop = log.scrollHeight;
+      if (el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+    }
+    function planText(p) {
+      return [p.title, p.problem, p.location ? "Var: " + p.location : "", p.solution ? "Förslag: " + p.solution : ""]
+        .concat((Array.isArray(p.questions) ? p.questions : []).map(function (x) { return "Fråga: " + x; }))
+        .filter(Boolean).join("\n\n");
+    }
+    function busy(on, t) {
+      mic.disabled = upd.disabled = send.disabled = on;
+      if (t) mode.textContent = t;
+    }
+    async function ask(t) {
+      said.push(t);
+      turns.push({ role: "user", text: t });
+      bubble("me", t);
+      busy(true, "Tänker …");
+      try {
+        var p = await a.makePlan(turns.slice(), location.pathname);
+        if (!dlgOpen) return;
+        plan = p || {};
+        turns.push({ role: "plan", text: JSON.stringify(plan) });
+        bubble("ai", planText(plan));
+        upd.hidden = false;
+        send.textContent = "Skicka feedback";
+        busy(false, "Klar – prata in igen eller skriv en rättelse, eller skicka.");
+      } catch (ex) {
+        busy(false, errText(ex) || "Planen gick inte att skriva. Försök igen.");
+      }
+    }
+    async function toggleRec() {
+      if (rec) return rec.stop();
+      var stream;
+      var parts = [];
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (ex) {
+        mode.textContent = "Mikrofonen gick inte att använda. Skriv i stället.";
+        return;
+      }
+      var r = (rec = new MediaRecorder(stream));
+      var limit = setTimeout(function () { if (rec === r) r.stop(); }, 300000); // högst 5 minuter
+      var end = function () {
+        clearTimeout(limit);
+        stream.getTracks().forEach(function (x) { x.stop(); });
+        rec = stopRec = null;
+        mic.textContent = "Prata in";
+        mic.classList.remove("on");
+      };
+      stopRec = function () {
+        r.onstop = null;
+        if (r.state !== "inactive") r.stop();
+        end();
+      };
+      r.ondataavailable = function (e) { if (e.data && e.data.size) parts.push(e.data); };
+      r.onstop = async function () {
+        end();
+        busy(true, "Skriver ut …");
+        try {
+          var t = await a.transcribe(new Blob(parts, { type: parts.length ? parts[0].type : r.mimeType }));
+          if (!dlgOpen) return;
+          t = String(t || "").trim();
+          if (t) return ask(t);
+          busy(false, "Inget hördes. Försök igen.");
+        } catch (ex) {
+          busy(false, errText(ex) || "Det gick inte att skriva ut. Försök igen eller skriv.");
+        }
+      };
+      r.start();
+      mic.textContent = "Klar";
+      mic.classList.add("on");
+      mode.textContent = "Lyssnar … tryck Klar när du har pratat färdigt.";
+    }
     var form = h("form", { novalidate: true }, [
-      h("label", { for: "bh-text", text: "Vad vill du berätta?" }),
+      talk ? log : null,
+      talk ? mic : null,
+      talk ? mode : null,
+      h("label", { for: "bh-text", text: talk ? "Eller skriv, även en rättelse till planen" : "Vad vill du berätta?" }),
       ta,
       h("fieldset", { class: "seg" }, [
         h("legend", { class: "lab", text: "Vad gäller det?" }),
@@ -592,7 +694,7 @@
       shotNote,
       selWrap,
       err,
-      h("div", { class: "row" }, [send, h("button", { type: "button", class: "b", text: "Avbryt", on: { click: closeDialog } })]),
+      h("div", { class: "row" }, [send, talk ? upd : null, h("button", { type: "button", class: "b", text: "Avbryt", on: { click: closeDialog } })]),
     ]);
     dlgBody.appendChild(form);
     formRefs = { ta: ta, general: general, sel: null };
@@ -638,7 +740,12 @@
     form.addEventListener("submit", async function (e) {
       e.preventDefault();
       err.hidden = true;
-      var text = ta.value.trim();
+      var text = plan ? said.join("\n\n") : ta.value.trim();
+      if (plan && ta.value.trim()) {
+        err.textContent = "Tryck Uppdatera planen först, eller töm rutan.";
+        err.hidden = false;
+        return;
+      }
       if (!text) {
         ta.setAttribute("aria-invalid", "true");
         err.textContent = "Skriv vad det gäller innan du skickar.";
@@ -665,6 +772,7 @@
           route: location.pathname,
           screenshot: isGeneral ? null : shot || null,
           reporterId: sel && sel.value ? sel.value : null,
+          plan: plan,
         });
       } catch (ex) {
         res = { ok: false, message: errText(ex) };
@@ -678,7 +786,7 @@
         return;
       }
       send.disabled = false;
-      send.textContent = "Skicka";
+      send.textContent = plan ? "Skicka feedback" : "Skicka";
       var m = res && res.message ? String(res.message) : "";
       err.textContent = "Det gick inte att skicka feedbacken." + (m ? " " + m : " Försök igen om en stund.");
       err.hidden = false;

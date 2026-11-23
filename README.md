@@ -42,6 +42,8 @@ window.NiemisHjalp.init({
     reopen(id, note) {},        // => Promise<void>, note är alltid ifylld
     captureScreenshot() {},     // valfri => Promise<Blob|null>
     reporters() {},             // valfri => Promise<Array<{ id, name }>>, tom lista = personligt konto
+    transcribe(ljud) {},        // valfri => Promise<string>, tal till text (t.ex. OpenAI via appens serverfunktion)
+    makePlan(turns, route) {},  // valfri => Promise<{ title, problem, location, solution, questions }>, hela planen skrivs om
   },
 });
 ```
