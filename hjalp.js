@@ -8,7 +8,7 @@
   "use strict";
   if (window.NiemisHjalp && window.NiemisHjalp.version) return;
 
-  var VERSION = "1.2.1";
+  var VERSION = "1.2.2";
   var IRIS_URL = "https://northern-lens-learning-quest.lovable.app/fraga?inbaddad=1&app=";
   var Z = 2147483000;
   var STATUS = {
@@ -596,13 +596,6 @@
     var log = h("div", { class: "log", "aria-live": "polite" });
     var mode = h("p", { class: "hint", role: "status", text: "Tryck på mikrofonen och berätta. Du kan rätta tills planen stämmer." });
     var mic = h("button", { type: "button", class: "b o mic", text: "Prata in", on: { click: toggleRec } });
-    var upd = h("button", { type: "button", class: "b fix", text: "Gör en plan av texten", on: { click: function () {
-      var t = ta.value.trim();
-      if (t) {
-        ta.value = "";
-        ask(t);
-      }
-    } } });
     function bubble(cls, t) {
       var el = log.appendChild(h("p", { class: "bub " + cls, text: t }));
       log.scrollTop = log.scrollHeight;
@@ -614,7 +607,7 @@
         .filter(Boolean).join("\n\n");
     }
     function busy(on, t) {
-      mic.disabled = upd.disabled = send.disabled = on;
+      mic.disabled = send.disabled = on;
       if (t) mode.textContent = t;
     }
     async function ask(t) {
@@ -624,15 +617,16 @@
       busy(true, "Tänker …");
       try {
         var p = await a.makePlan(turns.slice(), location.pathname);
-        if (!dlgOpen) return;
+        if (!dlgOpen) return false;
         plan = p || {};
         turns.push({ role: "plan", text: JSON.stringify(plan) });
         bubble("ai", planText(plan));
-        upd.textContent = "Rätta planen med texten";
         send.textContent = "Skicka feedback";
         busy(false, "Klar – prata in igen eller skriv en rättelse, eller skicka.");
+        return true;
       } catch (ex) {
         busy(false, errText(ex) || "Planen gick inte att skriva. Försök igen.");
+        return false;
       }
     }
     async function toggleRec() {
@@ -682,9 +676,8 @@
       talk ? log : null,
       talk ? mic : null,
       talk ? mode : null,
-      h("label", { for: "bh-text", text: talk ? "Eller skriv – till exempel vad som ska ändras i planen" : "Vad vill du berätta?" }),
+      h("label", { for: "bh-text", text: talk ? "Eller skriv" : "Vad vill du berätta?" }),
       ta,
-      talk ? upd : null,
       h("fieldset", { class: "seg" }, [
         h("legend", { class: "lab", text: "Vad gäller det?" }),
         h("label", {}, [page, "Gäller den här sidan"]),
@@ -741,12 +734,13 @@
     form.addEventListener("submit", async function (e) {
       e.preventDefault();
       err.hidden = true;
-      var text = plan ? said.join("\n\n") : ta.value.trim();
+      // Finns en plan och en skriven rättelse: skriv om planen med rättelsen först och skicka sedan.
       if (plan && ta.value.trim()) {
-        err.textContent = "Tryck Rätta planen med texten först, eller töm rutan.";
-        err.hidden = false;
-        return;
+        var fix = ta.value.trim();
+        ta.value = "";
+        if (!(await ask(fix)) || !dlgOpen) return;
       }
+      var text = plan ? said.join("\n\n") : ta.value.trim();
       if (!text) {
         ta.setAttribute("aria-invalid", "true");
         err.textContent = "Skriv vad det gäller innan du skickar.";

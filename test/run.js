@@ -409,16 +409,16 @@ async function extra(browser) {
         await page.locator(H + ' .bub.ai:has-text("Spara-knappen på iPad")').waitFor();
         await page.locator(H + ' [role=status]:has-text("Klar")').waitFor();
         ok(await page.locator(H + " .bub.me").first().isVisible(), "det inpratade syns inte som bubbla");
-        await page.fill(sel.text, "Det gäller iPad mini.");
-        await page.click(H + ' button:has-text("Rätta planen med texten")');
-        await page.locator(H + ' .bub.ai:has-text("(rättad)")').waitFor();
+        ok((await page.locator(H + ' button:has-text("plan")').count()) === 0, "det finns fortfarande en planknapp");
         await page.locator(sel.dialog).evaluate((el) => (el.scrollTop = 0));
         await page.screenshot({ path: path.join(SHOTS, namn + "-samtal.png") });
-        const mp = (await calls(page, "makePlan")).pop();
-        ok(mp.turns.length === 3 && mp.turns[1].role === "plan", "fel samtal till makePlan: " + JSON.stringify(mp.turns));
+        // En skriven rättelse skriver om planen när man skickar, utan egen knapp.
+        await page.fill(sel.text, "Det gäller iPad mini.");
         await page.selectOption(H + " #bh-person", "p1");
         await page.click(H + ' button[type=submit]:has-text("Skicka feedback")');
         await page.locator(H + ' .ok:has-text("Din feedback har skickats")').waitFor();
+        const mp = (await calls(page, "makePlan")).pop();
+        ok(mp.turns.length === 3 && mp.turns[1].role === "plan", "fel samtal till makePlan: " + JSON.stringify(mp.turns));
         const s = (await calls(page, "submit"))[0];
         ok(/Knappen Spara/.test(s.text) && /iPad mini/.test(s.text), "allt som sagts skickas inte: " + s.text);
         ok(s.plan && /rättad/.test(s.plan.title), "planen skickas inte: " + JSON.stringify(s.plan));

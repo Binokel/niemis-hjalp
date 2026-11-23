@@ -193,5 +193,6 @@ GitHub Pages cachar filer i upp till 10 minuter, så en ändring kan dröja någ
 - Vit text ligger på den mörkare orangea färgen `#b54d00` (kontrast minst 4,5:1); den ljusare `#e6670c` används bara för ramar och fokus.
 
 ## Ändringar
+- 1.2.2: knappen "Gör en plan av texten" är borttagen (Daniel 2026-11-23). Planen görs när man pratar in; en skriven rättelse skriver om planen när man skickar, och skriven text utan inspelning skickas som förut.
 - 1.0.1: tangentbordet i appen kan aldrig låsas om `showModal()` misslyckas; bättre kontrast för vit text på orange; README om att ta bort `iris.js` och appens egen knapp.
 
