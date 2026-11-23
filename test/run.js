@@ -410,7 +410,7 @@ async function extra(browser) {
         await page.locator(H + ' [role=status]:has-text("Klar")').waitFor();
         ok(await page.locator(H + " .bub.me").first().isVisible(), "det inpratade syns inte som bubbla");
         await page.fill(sel.text, "Det gäller iPad mini.");
-        await page.click(H + ' button:has-text("Uppdatera planen")');
+        await page.click(H + ' button:has-text("Rätta planen med texten")');
         await page.locator(H + ' .bub.ai:has-text("(rättad)")').waitFor();
         await page.locator(sel.dialog).evaluate((el) => (el.scrollTop = 0));
         await page.screenshot({ path: path.join(SHOTS, namn + "-samtal.png") });
