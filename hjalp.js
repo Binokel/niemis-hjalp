@@ -8,7 +8,7 @@
   "use strict";
   if (window.NiemisHjalp && window.NiemisHjalp.version) return;
 
-  var VERSION = "1.2.0";
+  var VERSION = "1.2.1";
   var IRIS_URL = "https://northern-lens-learning-quest.lovable.app/fraga?inbaddad=1&app=";
   var Z = 2147483000;
   var STATUS = {
@@ -199,7 +199,7 @@
     ".log{display:flex;flex-direction:column;gap:8px;max-height:45vh;overflow:auto;margin-top:6px}" +
     ".bub{margin:0;padding:10px 12px;border-radius:14px;max-width:90%;white-space:pre-wrap;word-break:break-word}" +
     ".bub.me{align-self:flex-end;background:var(--navy);color:#fff}.bub.ai{align-self:flex-start;background:var(--hover)}" +
-    ".mic{position:sticky;bottom:8px;z-index:1;width:100%;min-height:64px;margin-top:12px;font-size:18px}.mic.on{background:var(--err);border-color:var(--err)}" +
+    ".mic{position:sticky;bottom:8px;z-index:1;width:100%;min-height:64px;margin-top:12px;font-size:18px}.mic.on{background:var(--err);border-color:var(--err)}.fix{width:100%;margin-top:8px}" +
     ".ok{padding:8px 0}.ok p{margin:0 0 8px}" +
     ".list{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}" +
     ".item{padding:12px 14px;border:1px solid var(--line);border-radius:12px}" +
@@ -596,7 +596,7 @@
     var log = h("div", { class: "log", "aria-live": "polite" });
     var mode = h("p", { class: "hint", role: "status", text: "Tryck på mikrofonen och berätta. Du kan rätta tills planen stämmer." });
     var mic = h("button", { type: "button", class: "b o mic", text: "Prata in", on: { click: toggleRec } });
-    var upd = h("button", { type: "button", class: "b", text: "Uppdatera planen", hidden: true, on: { click: function () {
+    var upd = h("button", { type: "button", class: "b fix", text: "Gör en plan av texten", on: { click: function () {
       var t = ta.value.trim();
       if (t) {
         ta.value = "";
@@ -628,7 +628,7 @@
         plan = p || {};
         turns.push({ role: "plan", text: JSON.stringify(plan) });
         bubble("ai", planText(plan));
-        upd.hidden = false;
+        upd.textContent = "Rätta planen med texten";
         send.textContent = "Skicka feedback";
         busy(false, "Klar – prata in igen eller skriv en rättelse, eller skicka.");
       } catch (ex) {
@@ -682,8 +682,9 @@
       talk ? log : null,
       talk ? mic : null,
       talk ? mode : null,
-      h("label", { for: "bh-text", text: talk ? "Eller skriv, även en rättelse till planen" : "Vad vill du berätta?" }),
+      h("label", { for: "bh-text", text: talk ? "Eller skriv – till exempel vad som ska ändras i planen" : "Vad vill du berätta?" }),
       ta,
+      talk ? upd : null,
       h("fieldset", { class: "seg" }, [
         h("legend", { class: "lab", text: "Vad gäller det?" }),
         h("label", {}, [page, "Gäller den här sidan"]),
@@ -694,7 +695,7 @@
       shotNote,
       selWrap,
       err,
-      h("div", { class: "row" }, [send, talk ? upd : null, h("button", { type: "button", class: "b", text: "Avbryt", on: { click: closeDialog } })]),
+      h("div", { class: "row" }, [send, h("button", { type: "button", class: "b", text: "Avbryt", on: { click: closeDialog } })]),
     ]);
     dlgBody.appendChild(form);
     formRefs = { ta: ta, general: general, sel: null };
@@ -742,7 +743,7 @@
       err.hidden = true;
       var text = plan ? said.join("\n\n") : ta.value.trim();
       if (plan && ta.value.trim()) {
-        err.textContent = "Tryck Uppdatera planen först, eller töm rutan.";
+        err.textContent = "Tryck Rätta planen med texten först, eller töm rutan.";
         err.hidden = false;
         return;
       }
